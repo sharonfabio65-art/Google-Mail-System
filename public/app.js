@@ -28,11 +28,75 @@ function showError(element, message) {
 function formatDate(value) {
     if (!value) return "Date unavailable";
 
-    const date = new Date(value);
+    const date = parseDate(value);
 
-    if (Number.isNaN(date.getTime())) return "Date unavailable";
+    if (!date) return "Date unavailable";
 
     return date.toLocaleString();
+}
+
+/* Handles date strings, Unix seconds and Unix milliseconds. */
+function parseDate(value) {
+    if (value === null || value === undefined || value === "") {
+        return null;
+    }
+
+    let date;
+
+    if (typeof value === "number" || /^\d+$/.test(String(value).trim())) {
+        let timestamp = Number(value);
+
+        // Convert Unix seconds to milliseconds.
+        if (timestamp > 0 && timestamp < 100000000000) {
+            timestamp *= 1000;
+        }
+
+        date = new Date(timestamp);
+    } else {
+        date = new Date(value);
+    }
+
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/*
+ * Inbox timestamp:
+ * - Less than 24 hours old: time only.
+ * - 24 hours or older: date and time.
+ * - Full timestamp is available through the title tooltip.
+ */
+function formatMessageTimestamp(value) {
+    const date = parseDate(value);
+
+    if (!date) return "Date unavailable";
+
+    const now = Date.now();
+    const age = now - date.getTime();
+
+    if (age >= 0 && age < 24 * 60 * 60 * 1000) {
+        return date.toLocaleTimeString([], {
+            hour: "numeric",
+            minute: "2-digit"
+        });
+    }
+
+    return date.toLocaleString([], {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit"
+    });
+}
+
+function getMessageDate(message) {
+    return (
+        message.message_date ||
+        message.date ||
+        message.internalDate ||
+        message.received_at ||
+        null
+    );
 }
 
 function initials(name) {
@@ -55,6 +119,7 @@ async function initLogin() {
     if (!checkbox || !button) return;
 
     const params = new URLSearchParams(location.search);
+
     const errorMessages = {
         consent_required: "Please review and accept the mailbox access disclosure.",
         google_denied: "Google authorization was cancelled or denied.",
@@ -87,7 +152,8 @@ async function initLogin() {
         } catch (err) {
             showError(error, err.message);
             button.disabled = false;
-            button.innerHTML = '<span class="google-g">G</span> Continue with Google';
+            button.innerHTML =
+                '<span class="google-g">G</span> Continue with Google';
         }
     });
 }
@@ -121,7 +187,9 @@ async function initSuccess() {
         const button = $("#disconnectAccount");
         const error = $("#successError");
 
-        if (!confirm("Disconnect your Google account and revoke this application's access?")) {
+        if (!confirm(
+            "Disconnect your Google account and revoke this application's access?"
+        )) {
             return;
         }
 
@@ -154,7 +222,9 @@ const adminState = {
     selectedMessageIndex: -1,
     lastNotificationIds: new Set(),
     soundEnabled: false,
-    polling: null
+    polling: null,
+    pollingBusy: false,
+    userRefresh: null
 };
 
 function showAdminSection(section) {
@@ -177,16 +247,28 @@ function showAdminSection(section) {
         settings: "Settings"
     };
 
-    $("#pageHeading").textContent = headings[section] || "Dashboard";
+    const heading = $("#pageHeading");
+
+    if (heading) {
+        heading.textContent = headings[section] || "Dashboard";
+    }
 }
 
 async function loadAdminUsers() {
     const users = await api("/api/admin/users");
+
     adminState.users = users;
 
-    $("#totalUsers").textContent = users.length;
+    const totalUsers = $("#totalUsers");
+
+    if (totalUsers) {
+        totalUsers.textContent = users.length;
+    }
 
     const tbody = $("#usersTable");
+
+    if (!tbody) return;
+
     tbody.replaceChildren();
 
     if (!users.length) {
@@ -207,9 +289,11 @@ async function loadAdminUsers() {
 
         const userCell = document.createElement("td");
         const userWrap = document.createElement("div");
+
         userWrap.className = "user-cell";
 
         const image = document.createElement("img");
+
         image.className = "user-avatar";
         image.alt = "";
         image.src = user.profile_picture || "";
@@ -219,6 +303,7 @@ async function loadAdminUsers() {
         };
 
         const details = document.createElement("div");
+
         const fullName = document.createElement("strong");
         fullName.textContent = user.full_name || "Google user";
 
@@ -233,21 +318,28 @@ async function loadAdminUsers() {
         emailCell.textContent = user.email;
 
         const statusCell = document.createElement("td");
+
         const status = document.createElement("span");
         status.className = "status-pill";
         status.textContent = "Connected";
+
         statusCell.appendChild(status);
 
         const countCell = document.createElement("td");
+
         const count = document.createElement("span");
         count.className = "notification-number";
         count.textContent = user.notification_count;
+
         countCell.appendChild(count);
 
         const actionCell = document.createElement("td");
+
         const openButton = document.createElement("button");
+
         openButton.className = "button button-primary";
         openButton.textContent = "Read Inbox";
+
         openButton.addEventListener("click", () => openInbox(user));
 
         actionCell.appendChild(openButton);
@@ -277,6 +369,7 @@ async function saveSettings(event) {
     event.preventDefault();
 
     const status = $("#settingsStatus");
+
     status.textContent = "Saving...";
 
     try {
@@ -291,6 +384,7 @@ async function saveSettings(event) {
         });
 
         status.textContent = "Settings saved successfully.";
+
         await loadNotifications();
     } catch (error) {
         status.textContent = error.message;
@@ -331,6 +425,7 @@ function playFallbackBeep() {
 
         oscillator.start();
         oscillator.stop(context.currentTime + 0.18);
+
         oscillator.onended = () => context.close();
     } catch {
         // Sound is optional; notifications remain visible without it.
@@ -341,21 +436,36 @@ async function loadNotifications() {
     const notifications = await api("/api/admin/notifications");
 
     const unseen = notifications.filter(item => !item.acknowledged);
-    $("#totalNotifications").textContent = unseen.length;
-    $("#sidebarNotificationCount").textContent = unseen.length;
+
+    const totalNotifications = $("#totalNotifications");
+    const sidebarCount = $("#sidebarNotificationCount");
+
+    if (totalNotifications) {
+        totalNotifications.textContent = unseen.length;
+    }
+
+    if (sidebarCount) {
+        sidebarCount.textContent = unseen.length;
+    }
 
     const list = $("#notificationsList");
+
+    if (!list) return;
+
     list.replaceChildren();
 
     if (!notifications.length) {
         const empty = document.createElement("p");
+
         empty.className = "empty-state";
         empty.textContent = "No notifications yet.";
+
         list.appendChild(empty);
     }
 
     for (const item of notifications) {
         const card = document.createElement("div");
+
         card.className = "notification-item";
 
         const content = document.createElement("div");
@@ -364,20 +474,26 @@ async function loadNotifications() {
         title.textContent = item.subject || "(No subject)";
 
         const sender = document.createElement("p");
+
         sender.textContent =
             `${item.sender_name || item.sender_email || "Unknown sender"} ` +
             `(${item.sender_email || "unknown email"})`;
 
         const account = document.createElement("p");
+
         account.textContent =
             `Connected account: ${item.account_email}`;
 
         const date = document.createElement("p");
-        date.textContent = formatDate(item.message_date || item.created_at);
+
+        date.textContent = formatDate(
+            item.message_date || item.created_at
+        );
 
         content.append(title, sender, account, date);
 
         const button = document.createElement("button");
+
         button.className = "button button-outline";
         button.textContent = "Open";
 
@@ -388,9 +504,11 @@ async function loadNotifications() {
 
             if (user) {
                 await openInbox(user);
+
                 const index = adminState.messages.findIndex(
                     message =>
-                        message.gmail_message_id === item.gmail_message_id
+                        String(message.gmail_message_id) ===
+                        String(item.gmail_message_id)
                 );
 
                 if (index >= 0) {
@@ -451,9 +569,11 @@ async function openInbox(user) {
 
     $("#inboxAccount").textContent = user.email;
     $("#senderSearch").value = "";
+
     $("#messageList").replaceChildren();
 
     $("#messageView").textContent = "Select a message to read it.";
+
     $("#inboxModal").classList.remove("hidden");
 
     await fetchInboxMessages(false);
@@ -461,13 +581,16 @@ async function openInbox(user) {
 
 async function fetchInboxMessages(loadMore) {
     const userId = adminState.activeUserId;
+
     if (!userId) return;
 
     const params = new URLSearchParams();
 
     const search = $("#senderSearch").value.trim();
 
-    if (search) params.set("search", search);
+    if (search) {
+        params.set("search", search);
+    }
 
     if (loadMore && adminState.nextPageToken) {
         params.set("pageToken", adminState.nextPageToken);
@@ -476,17 +599,21 @@ async function fetchInboxMessages(loadMore) {
     const url =
         `/api/admin/inbox/${encodeURIComponent(userId)}?${params}`;
 
-    $("#messageList").textContent = "Loading messages...";
+    if (!loadMore && !adminState.messages.length) {
+        $("#messageList").textContent = "Loading messages…";
+    }
 
     try {
         const data = await api(url);
 
         if (!loadMore) {
             adminState.messages = [];
+            adminState.selectedMessageIndex = -1;
         }
 
-        adminState.messages.push(...data.messages);
-        adminState.nextPageToken = data.nextPageToken;
+        adminState.messages.push(...(data.messages || []));
+
+        adminState.nextPageToken = data.nextPageToken || null;
 
         renderMessageList();
 
@@ -498,18 +625,33 @@ async function fetchInboxMessages(loadMore) {
                 "No messages match the current filter.";
         }
     } catch (error) {
-        $("#messageList").textContent = error.message;
+        const message = document.createElement("p");
+
+        message.className = "empty-state error-state";
+        message.textContent = `${error.message} — try refreshing.`;
+
+        if (!adminState.messages.length) {
+            $("#messageList").replaceChildren(message);
+        } else {
+            console.error("Inbox refresh failed:", error);
+        }
     }
 }
 
 function renderMessageList() {
     const list = $("#messageList");
+
     list.replaceChildren();
 
-    for (let index = 0; index < adminState.messages.length; index++) {
+    for (
+        let index = 0;
+        index < adminState.messages.length;
+        index++
+    ) {
         const message = adminState.messages[index];
 
         const button = document.createElement("button");
+
         button.className = "message-item";
 
         if (index === adminState.selectedMessageIndex) {
@@ -517,16 +659,46 @@ function renderMessageList() {
         }
 
         const sender = document.createElement("strong");
+
         sender.textContent =
-            message.sender_name || message.sender_email || "Unknown sender";
+            message.sender_name ||
+            message.sender_email ||
+            "Unknown sender";
+
+        /*
+         * NEW: Timestamp beside the sender.
+         */
+        const timestampValue = getMessageDate(message);
+
+        const timestamp = document.createElement("time");
+
+        timestamp.className = "message-date";
+        timestamp.textContent =
+            formatMessageTimestamp(timestampValue);
+
+        const parsedDate = parseDate(timestampValue);
+
+        if (parsedDate) {
+            timestamp.dateTime = parsedDate.toISOString();
+            timestamp.title = parsedDate.toLocaleString();
+        }
 
         const subject = document.createElement("span");
+
+        subject.className = "message-subject";
         subject.textContent = message.subject || "(No subject)";
 
         const snippet = document.createElement("small");
+
+        snippet.className = "message-snippet";
         snippet.textContent = message.snippet || "";
 
-        button.append(sender, subject, snippet);
+        button.append(
+            sender,
+            timestamp,
+            subject,
+            snippet
+        );
 
         button.addEventListener("click", () => openMessage(index));
 
@@ -536,12 +708,15 @@ function renderMessageList() {
 
 async function openMessage(index) {
     const message = adminState.messages[index];
+
     if (!message) return;
 
     adminState.selectedMessageIndex = index;
+
     renderMessageList();
 
     const view = $("#messageView");
+
     view.textContent = "Loading message...";
 
     try {
@@ -553,37 +728,97 @@ async function openMessage(index) {
         view.replaceChildren();
 
         const subject = document.createElement("h3");
+
         subject.textContent = data.subject || "(No subject)";
 
         const meta = document.createElement("div");
+
         meta.className = "message-meta";
-        meta.textContent =
-            `From: ${data.sender_name || ""} ${data.sender_email || ""}\n` +
-            `Date: ${data.date || "Unknown"}`;
+
+        const senderLine = document.createElement("div");
+
+        senderLine.textContent =
+            `From: ${data.sender_name || ""} ${data.sender_email || ""}`;
+
+        /*
+         * NEW: Timestamp in the full email reading pane.
+         * Prefer the full message response, then fall back to
+         * the timestamp already available in the inbox list.
+         */
+        const messageDate =
+            data.message_date ||
+            data.date ||
+            data.internalDate ||
+            getMessageDate(message);
+
+        const dateLine = document.createElement("div");
+
+        dateLine.className = "message-date-full";
+
+        const dateLabel = document.createElement("span");
+
+        dateLabel.textContent = "Date: ";
+
+        const dateValue = document.createElement("time");
+
+        dateValue.className = "message-date";
+
+        dateValue.textContent =
+            formatMessageTimestamp(messageDate);
+
+        const parsedDate = parseDate(messageDate);
+
+        if (parsedDate) {
+            dateValue.dateTime = parsedDate.toISOString();
+            dateValue.title = parsedDate.toLocaleString();
+        }
+
+        dateLine.append(dateLabel, dateValue);
+
+        meta.append(senderLine, dateLine);
 
         const body = document.createElement("div");
+
         body.className = "message-body";
+
         body.textContent = data.body_text ||
             "This email does not contain a readable plain-text body.";
 
         const navigation = document.createElement("div");
+
         navigation.className = "message-navigation";
 
         const previous = document.createElement("button");
+
         previous.className = "button button-outline";
         previous.textContent = "Previous";
         previous.disabled = index <= 0;
-        previous.addEventListener("click", () => openMessage(index - 1));
+
+        previous.addEventListener("click", () => {
+            openMessage(index - 1);
+        });
 
         const next = document.createElement("button");
+
         next.className = "button button-outline";
         next.textContent = "Next";
         next.disabled = index >= adminState.messages.length - 1;
-        next.addEventListener("click", () => openMessage(index + 1));
+
+        next.addEventListener("click", () => {
+            openMessage(index + 1);
+        });
 
         navigation.append(previous, next);
 
-        view.append(subject, meta, body, navigation);
+        view.append(
+            subject,
+            meta,
+            body,
+            navigation
+        );
+
+        // Start reading the newly opened email from the top.
+        view.scrollTop = 0;
     } catch (error) {
         view.textContent = error.message;
     }
@@ -602,25 +837,66 @@ async function initAdmin() {
 
         loginPage.classList.add("hidden");
         dashboard.classList.remove("hidden");
+
         $("#adminAccountLabel").textContent = admin.email;
 
         await loadAdminUsers();
         await loadSettings();
         await loadNotifications();
 
+        /*
+         * Refresh notification records every 2 seconds.
+         * Gmail mailbox discovery itself remains on the
+         * server-side quota-safe schedule.
+         */
         adminState.polling = setInterval(async () => {
-            await refreshDashboard();
-        }, 60 * 1000);
+            if (adminState.pollingBusy || document.hidden) return;
+
+            adminState.pollingBusy = true;
+
+            try {
+                await loadNotifications();
+
+                const sync = $("#syncStatus");
+
+                if (sync) {
+                    sync.textContent =
+                        `Updated ${new Date().toLocaleTimeString()}`;
+                }
+            } catch (error) {
+                const sync = $("#syncStatus");
+
+                if (sync) {
+                    sync.textContent = "Connection issue · retrying";
+                }
+
+                console.error(
+                    "Admin notification refresh failed:",
+                    error
+                );
+            } finally {
+                adminState.pollingBusy = false;
+            }
+        }, 2000);
+
+        adminState.userRefresh = setInterval(() => {
+            if (!document.hidden) {
+                loadAdminUsers().catch(error =>
+                    console.error("User list refresh failed:", error)
+                );
+            }
+        }, 30000);
 
     } catch {
         loginPage.classList.remove("hidden");
         dashboard.classList.add("hidden");
     }
 
-    $("#adminLoginForm").addEventListener("submit", async event => {
+    $("#adminLoginForm")?.addEventListener("submit", async event => {
         event.preventDefault();
 
         const error = $("#adminLoginError");
+
         error.textContent = "";
 
         try {
@@ -638,7 +914,7 @@ async function initAdmin() {
         }
     });
 
-    $("#adminLogout").addEventListener("click", async () => {
+    $("#adminLogout")?.addEventListener("click", async () => {
         try {
             await api("/api/admin/logout", {
                 method: "POST",
@@ -655,19 +931,26 @@ async function initAdmin() {
         });
     });
 
-    $("#settingsForm").addEventListener("submit", saveSettings);
+    $("#settingsForm")?.addEventListener("submit", saveSettings);
 
-    $("#refreshUsers").addEventListener("click", loadAdminUsers);
-    $("#refreshNotifications").addEventListener("click", loadNotifications);
+    $("#refreshUsers")?.addEventListener("click", loadAdminUsers);
 
-    $("#enableSound").addEventListener("click", async () => {
+    $("#refreshNotifications")?.addEventListener(
+        "click",
+        loadNotifications
+    );
+
+    $("#enableSound")?.addEventListener("click", async () => {
         adminState.soundEnabled = true;
 
         const audio = $("#notificationAudio");
 
         if (audio) {
             try {
+                audio.volume = 0.9;
+
                 await audio.play();
+
                 audio.pause();
                 audio.currentTime = 0;
             } catch {
@@ -680,32 +963,32 @@ async function initAdmin() {
         $("#enableSound").textContent = "Sound enabled";
     });
 
-    $("#closeInbox").addEventListener("click", () => {
+    $("#closeInbox")?.addEventListener("click", () => {
         $("#inboxModal").classList.add("hidden");
     });
 
-    $("#inboxModal").addEventListener("click", event => {
+    $("#inboxModal")?.addEventListener("click", event => {
         if (event.target === $("#inboxModal")) {
             $("#inboxModal").classList.add("hidden");
         }
     });
 
-    $("#searchInbox").addEventListener("click", () => {
+    $("#searchInbox")?.addEventListener("click", () => {
         fetchInboxMessages(false);
     });
 
-    $("#senderSearch").addEventListener("keydown", event => {
+    $("#senderSearch")?.addEventListener("keydown", event => {
         if (event.key === "Enter") {
             fetchInboxMessages(false);
         }
     });
 
-    $("#clearInboxSearch").addEventListener("click", () => {
+    $("#clearInboxSearch")?.addEventListener("click", () => {
         $("#senderSearch").value = "";
         fetchInboxMessages(false);
     });
 
-    $("#loadMoreMessages").addEventListener("click", () => {
+    $("#loadMoreMessages")?.addEventListener("click", () => {
         fetchInboxMessages(true);
     });
 }

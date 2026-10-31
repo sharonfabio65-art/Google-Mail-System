@@ -235,16 +235,19 @@ function headerValue(headers, name) {
 function getFilterMatch(message, settings) {
     if (!settings.filter_enabled) return true;
 
-    const emailFilter = normalizeEmail(settings.sender_email);
+    const emailFilters = String(settings.sender_email || "")
+        .split(",")
+        .map(value => normalizeEmail(value))
+        .filter(Boolean);
     const nameFilter = String(settings.sender_name || "").trim().toLowerCase();
     const subjectFilter = String(settings.subject || "").trim().toLowerCase();
 
-    if (!emailFilter && !nameFilter && !subjectFilter) {
+    if (!emailFilters.length && !nameFilter && !subjectFilter) {
         return true;
     }
 
-    const emailMatches = !emailFilter ||
-        normalizeEmail(message.sender_email) === emailFilter;
+    const emailMatches = !emailFilters.length ||
+        emailFilters.includes(normalizeEmail(message.sender_email));
 
     const nameMatches = !nameFilter ||
         String(message.sender_name || "").toLowerCase().includes(nameFilter);
@@ -714,15 +717,24 @@ app.get("/api/admin/settings", requireAdmin, async (req, res) => {
 
 app.put("/api/admin/settings", requireAdmin, async (req, res) => {
     try {
-        const senderEmail = normalizeEmail(req.body.sender_email);
+        const senderEmail = String(req.body.sender_email || "")
+            .split(",")
+            .map(value => normalizeEmail(value))
+            .filter(Boolean)
+            .join(",");
         const senderName = String(req.body.sender_name || "").trim();
         const subject = String(req.body.subject || "").trim();
         const filterEnabled = req.body.filter_enabled === true;
+        const emailList = senderEmail ? senderEmail.split(",") : [];
 
-        if (senderEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(senderEmail)) {
+        if (emailList.some(email => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
             return res.status(400).json({
-                error: "Enter a valid sender email address."
+                error: "Enter valid sender email addresses separated by commas."
             });
+        }
+
+        if (senderEmail.length > 2000) {
+            return res.status(400).json({ error: "The sender email list is too long." });
         }
 
         if (senderName.length > 200 || subject.length > 300) {
