@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign in with Google</title>
+    <link rel="stylesheet" href="/style.css">
+    <script src="/app.js" defer></script>
+</head>
+<body>
+    <main class="auth-page">
+        <section class="auth-card">
+            <!-- Replace this logo text with your existing branding if needed. -->
+            <div class="brand">
+                <div class="brand-mark">G</div>
+                <span>Your Website</span>
+            </div>
+
+            <h1>Connect your Google account</h1>
+            <p class="muted">
+                Sign in securely with Google to connect your account.
+            </p>
+
+            <div class="consent-panel">
+                <h2>What you are authorizing</h2>
+                <ul>
+                    <li>Your Google account ID, name, email address and profile picture.</li>
+                    <li>Read-only access to your Gmail mailbox.</li>
+                </ul>
+
+                <p class="notice">
+                    <strong>Important:</strong> Gmail's read-only permission
+                    technically covers your mailbox, not just the Inbox.
+                    This application will display Inbox messages only.
+                </p>
+
+                <p>
+                    By continuing with mailbox access enabled, you explicitly
+                    authorize the designated administrator to view your Inbox
+                    messages through this application. Your message contents
+                    are retrieved when opened and are not stored as complete
+                    email bodies in this application's database.
+                </p>
+
+                <label class="consent-check">
+                    <input type="checkbox" id="mailboxConsent">
+                    <span>
+                        I understand and explicitly authorize the mailbox
+                        access described above.
+                    </span>
+                </label>
+            </div>
+
+            <button class="google-button" id="googleSignIn" type="button" disabled>
+                <span class="google-g">G</span>
+                Continue with Google
+            </button>
+
+            <p class="small muted">
+                You can revoke this application's Google access through
+                your Google Account settings.
+            </p>
+
+            <p class="error-message" id="loginError" role="alert"></p>
+        </section>
+    </main>
+</body>
+</html>

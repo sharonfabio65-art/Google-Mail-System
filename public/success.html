@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Connected</title>
+    <link rel="stylesheet" href="/style.css">
+    <script src="/app.js" defer></script>
+</head>
+<body>
+    <main class="auth-page">
+        <section class="auth-card success-card">
+            <div class="success-icon">✓</div>
+
+            <h1>Google account connected</h1>
+
+            <p class="muted">
+                Your Google account has been connected successfully.
+            </p>
+
+            <div class="profile-summary">
+                <img id="successPicture" src="" alt="Google profile picture">
+                <div>
+                    <strong id="successName">Loading account...</strong>
+                    <p id="successEmail" class="muted"></p>
+                </div>
+            </div>
+
+            <p class="notice">
+                Your account is connected. You can disconnect it at any time.
+                Disconnecting revokes this application's stored Google
+                credentials and removes administrator mailbox access.
+            </p>
+
+            <button class="button button-danger" id="disconnectAccount">
+                Disconnect Google account
+            </button>
+
+            <p class="error-message" id="successError" role="alert"></p>
+        </section>
+    </main>
+</body>
+</html>

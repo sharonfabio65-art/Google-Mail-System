@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administrator Dashboard</title>
+    <link rel="stylesheet" href="/style.css">
+    <script src="/app.js" defer></script>
+</head>
+<body class="admin-body">
+
+    <!-- ADMIN LOGIN -->
+    <main class="admin-login-page" id="adminLoginPage">
+        <form class="admin-login-card" id="adminLoginForm">
+            <div class="brand">
+                <div class="brand-mark">G</div>
+                <span>Administration</span>
+            </div>
+
+            <h1>Administrator login</h1>
+            <p class="muted">Sign in to manage connected accounts.</p>
+
+            <label for="adminEmail">Email address</label>
+            <input
+                type="email"
+                id="adminEmail"
+                autocomplete="username"
+                required
+            >
+
+            <label for="adminPassword">Password</label>
+            <input
+                type="password"
+                id="adminPassword"
+                autocomplete="current-password"
+                required
+            >
+
+            <button class="button button-primary full-width" type="submit">
+                Sign in
+            </button>
+
+            <p class="error-message" id="adminLoginError" role="alert"></p>
+        </form>
+    </main>
+
+    <!-- ADMIN DASHBOARD -->
+    <div class="dashboard hidden" id="adminDashboard">
+
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-mark">G</div>
+                <span>Mail Admin</span>
+            </div>
+
+            <nav class="side-nav">
+                <button class="nav-button active" data-section="overview">
+                    <span>▦</span> Overview
+                </button>
+
+                <button class="nav-button" data-section="notifications">
+                    <span>♢</span> Notifications
+                    <span class="nav-count" id="sidebarNotificationCount">0</span>
+                </button>
+
+                <button class="nav-button" data-section="settings">
+                    <span>⚙</span> Settings
+                </button>
+            </nav>
+
+            <div class="sidebar-bottom">
+                <span id="adminAccountLabel">Administrator</span>
+                <button class="button button-outline full-width" id="adminLogout">
+                    Log out
+                </button>
+            </div>
+        </aside>
+
+        <main class="dashboard-main">
+            <header class="topbar">
+                <div>
+                    <h1 id="pageHeading">Overview</h1>
+                    <p class="muted">Manage authorized Google connections.</p>
+                </div>
+
+                <button class="button button-outline" id="enableSound">
+                    Enable sound
+                </button>
+            </header>
+
+            <!-- OVERVIEW -->
+            <section class="dashboard-section" id="section-overview">
+                <div class="stats-grid">
+                    <article class="stat-card">
+                        <span class="muted">Connected accounts</span>
+                        <strong id="totalUsers">0</strong>
+                    </article>
+
+                    <article class="stat-card">
+                        <span class="muted">New notifications</span>
+                        <strong id="totalNotifications">0</strong>
+                    </article>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-heading">
+                        <div>
+                            <h2>Connected users</h2>
+                            <p class="muted">
+                                Only users who authorized administrator
+                                mailbox access are listed.
+                            </p>
+                        </div>
+
+                        <button class="button button-outline" id="refreshUsers">
+                            Refresh
+                        </button>
+                    </div>
+
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Google email</th>
+                                    <th>Status</th>
+                                    <th>Notifications</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersTable">
+                                <tr>
+                                    <td colspan="5" class="empty-state">
+                                        Loading users...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- NOTIFICATIONS -->
+            <section
+                class="dashboard-section hidden"
+                id="section-notifications"
+            >
+                <div class="panel">
+                    <div class="panel-heading">
+                        <div>
+                            <h2>New email notifications</h2>
+                            <p class="muted">
+                                Incoming messages matching the current settings.
+                            </p>
+                        </div>
+                        <button class="button button-outline" id="refreshNotifications">
+                            Refresh
+                        </button>
+                    </div>
+
+                    <div id="notificationsList" class="notifications-list">
+                        <p class="empty-state">No notifications yet.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SETTINGS -->
+            <section class="dashboard-section hidden" id="section-settings">
+                <div class="panel settings-panel">
+                    <h2>Email filtering settings</h2>
+                    <p class="muted">
+                        Configure which incoming Inbox messages appear
+                        in the dashboard and trigger notifications.
+                    </p>
+
+                    <form id="settingsForm">
+                        <div class="setting-row">
+                            <div>
+                                <strong>Filter Mode</strong>
+                                <p class="muted">
+                                    Turn this on to show only matching messages.
+                                </p>
+                            </div>
+
+                            <label class="switch">
+                                <input type="checkbox" id="filterEnabled">
+                                <span class="switch-slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="filterSenderEmail">Exact sender email</label>
+                            <input
+                                type="email"
+                                id="filterSenderEmail"
+                                placeholder="support@example.com"
+                            >
+                        </div>
+
+                        <div class="form-group">
+                            <label for="filterSenderName">Sender name</label>
+                            <input
+                                type="text"
+                                id="filterSenderName"
+                                placeholder="Example Support"
+                            >
+                        </div>
+
+                        <div class="form-group">
+                            <label for="filterSubject">Email subject</label>
+                            <input
+                                type="text"
+                                id="filterSubject"
+                                placeholder="Account verification"
+                            >
+                        </div>
+
+                        <div class="notice">
+                            When multiple fields are filled, all filled fields
+                            must match. Empty fields are ignored. When Filter
+                            Mode is OFF, all Inbox messages are shown.
+                        </div>
+
+                        <button class="button button-primary" type="submit">
+                            Save settings
+                        </button>
+
+                        <p id="settingsStatus" class="status-message"></p>
+                    </form>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- INBOX MODAL -->
+    <div class="modal-overlay hidden" id="inboxModal">
+        <section class="modal modal-large">
+            <header class="modal-header">
+                <div>
+                    <h2 id="inboxTitle">User Inbox</h2>
+                    <p id="inboxAccount" class="muted"></p>
+                </div>
+
+                <button class="icon-button" id="closeInbox" aria-label="Close">
+                    ×
+                </button>
+            </header>
+
+            <div class="inbox-toolbar">
+                <input
+                    type="text"
+                    id="senderSearch"
+                    placeholder="Search sender email..."
+                >
+                <button class="button button-primary" id="searchInbox">
+                    Search
+                </button>
+                <button class="button button-outline" id="clearInboxSearch">
+                    Clear
+                </button>
+            </div>
+
+            <div class="inbox-content">
+                <div class="message-list" id="messageList">
+                    <p class="empty-state">Select an account to load messages.</p>
+                </div>
+
+                <article class="message-view" id="messageView">
+                    <div class="empty-state">
+                        Select a message to read it.
+                    </div>
+                </article>
+            </div>
+
+            <footer class="modal-footer">
+                <button class="button button-outline" id="loadMoreMessages">
+                    Load more
+                </button>
+            </footer>
+        </section>
+    </div>
+
+    <audio id="notificationAudio" preload="auto" src="/sounds/notification.mp3.wav"></audio>
+
+</body>
+</html>
